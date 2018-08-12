@@ -1,98 +1,173 @@
-[![Build Status](https://travis-ci.org/spring-projects/spring-security-oauth.svg?branch=master)](https://travis-ci.org/spring-projects/spring-security-oauth) 
+JsonObject jsonObj = ApiOperator 
+						.get("/ssmp/endeca/search")//返回一个RequestEntityBuilder
+						.dynamicVersion()
+						.param("keyword","australia")
+						.cookie("cookieName","cookieValue")
+						.header("headerName","headerValue")	
+						.request()//返回一个responseEntityHolder()
+						.ifNotOk(Object)//如果不是200、或者有ApiException出现（就不会抛出异常了）就使用该 object 作为alternative请求相应的内容
+						.addConsumers(new Consumer(){})
+						.toJsonObj();
 
-This project provides support for using Spring Security with OAuth
-(1a) and OAuth2.  It provides features for implementing both consumers
-and providers of these protocols using standard Spring and Spring
-Security programming models and configuration idioms.
+创建一个ApiResponseHolder,下面有几个子类：ErrorResponseHolder(请求中发生了异常) OkResponseHolder(200),DefaultResponseHolde(非200)
 
-# Code of Conduct
-This project adheres to the Contributor Covenant [code of conduct](CODE_OF_CONDUCT.adoc).
-By participating, you  are expected to uphold this code. Please report unacceptable behavior to spring-code-of-conduct@pivotal.io.
+ApiResponseHolder是一个abstract类，有方法 newApiResponseHolder(CloseableClientHttpResponse)根据状态码来决定返回那个子类的实例。需要关闭CloseableClientHttpResponse
+如果请求中抛出了异常，就直接返回 ErrorResponseHolder类的实例。
 
-# Getting Started
+ApiResponseHolder封装了返回的CloseableClientHttpResponse中各种属性。他的子类里面提供了业务逻辑方法
 
-[Download](https://github.com/spring-projects/spring-security-oauth/tags)
-or clone from
-[GIT](https://github.com/spring-projects/spring-security-oauth) and then
-use Maven (3.0.\*) and Java (1.6 or better):
-
-    $ git clone ...
-    $ mvn install -P bootstrap
-
-Use the `bootstrap` profile only the first time - it enables some
-repositories that can't be exposed in the poms by default. You may
-find it useful to add this profile to your local `settings.xml`.
-
-You need to run Redis to get the build to work.  You can install this 
-using homebrew.  Without Redis running the build will lots of Jedis
-connection exceptions
-
-SpringSource ToolSuite users (or Eclipse users with the latest
-m2eclipse plugin) can import the projects as existing Maven projects.
-
-Spring Security OAuth is released under the terms of the Apache
-Software License Version 2.0 (see license.txt).
-
-## Samples
-
-Samples and integration tests are in [a subdirectory](samples).  There
-is a separate README there for orientation and information.  Once you
-have installed the artifacts locally (as per the getting started
-instructions above) you should be able to
-
-    $ cd samples/oauth2/tonr
-    $ mvn tomcat7:run
+在ApiContext中有方法： ApiResponseHolder request(){
 	
-and visit the app in your browser at [http://localhost:8080/tonr2/](http://localhost:8080/tonr2/)
-to check that it works.  (This is for the OAuth 2.0 sample, for the
-OAuth 1.0a sample just remove the "2" from the directory path.) Integration tests
-require slightly different settings for Tomcat so you need to add a profile:
+			ApiResponseHolder.newApiResponseHolder(this.requestEntity);//在方法newApiResponseHolder里面调用请求
+			
+}
+在ApiResponseHolder里面会维护一个RequestEntity的引用
 
-    $ cd samples/oauth2/tonr
-    $ mvn integration-test -P integration
 
-## Changelog
+//在apiServlet中需要
+ApiOperator.dynamic().dynamicVersion().all().request().isOk("Request remote resources failed with ${apiPath}").response();//"在请求参数中必须要有一个叫做apiPath的参数"
 
-Lists of issues addressed per release can be found in [github](https://github.com/spring-projects/spring-security-oauth/milestones) (older releases are in
-[JIRA](https://jira.spring.io/browse/SECOAUTH/?selectedTab=com.atlassian.jira.jira-projects-plugin:versions-panel)).
+//模拟请求后台的blogs
+JsonObject jsonObj = ApiOperator.get("/blog/blogs").request().toJsonObj();//如果返回的结果不是json格式或者说不是jsonObject，抛出ApiException.
 
-## Additional Resources
+//模拟blog新增event触发时添加blogid的请求
+ApiOperator
+.post("/blog/post")
+.param("blogId","12345677")
+.request()
+.isOK("Create a new post's id failed, Please contact admin to sovle this issue!");//isOK()方法断言请求一定返回200 如果你不需要response返回的内容 ，请务必使用isOk()方法
 
-* [Spring Security OAuth User Guide](http://projects.spring.io/spring-security-oauth/docs/Home.html)
-* [Spring Security OAuth Source](http://github.com/spring-projects/spring-security-oauth)
-* [Stackoverflow](http://stackoverflow.com/questions/tagged/spring-security+spring+oauth)
+//模拟用户登录的请求
+ApiOperator.post("/blog/login").param("username","mockname").param("password","xxxx").request().response();
 
-# Contributing to Spring Security OAuth
+//staitstic 统计使用ApiOperator发出请求中，不是200的请求，并定时的写回到AEM节点中，方便查看。
 
-Here are some ways for you to get involved in the community:
+// 创建一个exception: ApiException extends RuntimeException 当在请求准备、中、返回结果处理：发生的一切异常都会抛出该异常类。
 
-* Get involved with the Spring community on the Spring Community Forums.  Please help out on the
-  [forum](http://forum.springsource.org/forumdisplay.php?f=79) by responding to questions and joining the debate.
-* Create [github issues](https://github.com/spring-projects/spring-security-oauth/issues) for bugs and new features and comment and
-  vote on the ones that you are interested in.
-* Github is for social coding: if you want to write code, we encourage contributions through pull requests from
-  [forks of this repository](http://help.github.com/forking/).  If you want to contribute code this way, please
-  reference a github issue as well covering the specific issue you are addressing.
-* Watch for upcoming articles on Spring by [subscribing](http://www.springsource.org/node/feed) to springframework.org
 
-Before we accept a non-trivial patch or pull request we will need you to sign the
-[contributor's agreement](https://support.springsource.com/spring_committer_signup).
-Signing the contributor's agreement does not grant anyone commit rights to the main repository, but it does mean that we
-can accept your contributions, and you will get an author credit if we do.  Active contributors might be asked to join
-the core team, and given the ability to merge pull requests.
+//在上述的fluent方法都不会抛出受检异常，也就是说说当出现请求失败（比如 host error）会抛出 ApiException（运行时异常）
 
-## Code Conventions and Housekeeping
 
-None of these is essential for a pull request, but they will all help.  They can also be added after the original pull
-request but before a merge.
+public final class ApiOperator{
 
-* Use the Spring Framework code format conventions. Import `eclipse-code-formatter.xml` from the root of the project
-  if you are using Eclipse. If using IntelliJ, copy `spring-intellij-code-style.xml` to `~/.IntelliJIdea*/config/codestyles`
-  and select spring-intellij-code-style from Settings -> Code Styles.
-* Make sure all new .java files have a simple Javadoc class comment with at least an @author tag identifying you, and
-  preferably at least a paragraph on what the class is for.
-* Add the ASF license header comment to all new .java files (copy from existing files in the project)
-* Add yourself as an @author to the .java files that you modify substantially (more than cosmetic changes).
-* Add some Javadocs and, if you change the namespace, some XSD doc elements.
-* A few unit tests would help a lot as well - someone has to do it.
-* If no-one else is using your branch, please rebase it against the current master (or other target branch in the main project).
+	RequestEntityBuilder get(String url);
+
+	RequestEntityBuilder post(String url);
+
+	RequestEntityBuilder dynamic();
+
+	RequestStat stat();
+
+}
+
+class RequestStat{
+
+	class RequestRecord{
+
+	}
+}
+
+interface RequestEntityBuilder{
+
+	RequestEntityBuilder dynamicVersion();
+
+	RequestEntityBuilder param(String name,Object value);//value 是直接toString();
+
+	RequestEntityBuilder header(String name,String... value);
+
+	RequestEntityBuilder cookie(String name,String value);
+
+	RequestEntityBuilder all();
+
+	RequestEntityBuilder consumer(Consumer<ApiResponseHolder>... consumers);
+
+	RequestEntityBuilder ifNotOk(Object object);
+
+	ApiResonseProcessor request();
+
+}
+
+interface ApiResonseProcessor{
+
+	void isOk();
+
+	void isOk(String errorMsg);
+
+	JsonObject toJsonObj();
+
+	JsonArray toJsonArray();
+
+	void response();
+
+}
+
+abstract class ApiResponseHolder implements ApiResonseProcessor{
+
+	RequestEntity requestEnity;
+
+	int status;
+
+	MediaType mediaType;
+
+	String responseContent;
+
+	MultiValueMap headers;
+
+	List<Cookie> cookies;
+
+	Object alternative;
+
+	List<Consumer<ApiResponseHolder>> consumers;
+
+
+	ApiResonseProcessor newApiResponseHolder(RequestEntity requestEnity){
+		this.requestEnity = requestEnity;
+		return this.initApiResponseHolder();
+	}
+
+	ApiResonseProcessor initApiResponseHolder(){
+
+		ApiResonseProcessor apiResponseHolder;
+
+		try(CloseableClientHttpResponse response = this.requestEnity.request();){
+
+		}catch(Throwable t){
+			apiResponseHolder= new ErrorApiResponseHolder(t);
+		}
+		this.doConsumers(apiResponseHolder);
+		return apiResponseHolder;
+	}
+
+	private ApiResponseHolder extract(CloseableClientHttpResponse response){
+		//获取response status来决定返回的是OkApiResponseHolder/DefaultResponseHolde
+	}
+
+	private void doConsumers(ApiResponseHolder apiResponseHolder){
+
+	}
+
+	String parseMsg(String msg);//解析isOk("${apiPath}")等特定的字符
+
+
+}
+
+class OkApiResponseHolder extends ApiResponseHolder{
+
+
+}
+
+class DefaultApiResponseHolder extends ApiResponseHolder{
+
+
+}
+
+
+class ErrorApiResponseHolder extends ApiResponseHolder{
+
+	//如果没有设置ifNotOk(),全部抛出ApiException
+
+}
+
+public class ApiException extends RuntimeException{
+
+}
