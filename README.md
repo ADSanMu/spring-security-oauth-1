@@ -90,6 +90,8 @@ interface RequestEntityBuilder{
 interface ApiResonseProcessor{
 
 	ApiResonseProcessor isOk(String errorMsg);
+	
+	ApiResonseProcessor noError(String errorMsg);
 
 	JsonObject toJsonObj();
 
