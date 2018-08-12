@@ -89,9 +89,9 @@ interface RequestEntityBuilder{
 
 interface ApiResonseProcessor{
 
-	void isOk();
+	ApiResonseProcessor isOk();
 
-	void isOk(String errorMsg);
+	ApiResonseProcessor isOk(String errorMsg);
 
 	JsonObject toJsonObj();
 
